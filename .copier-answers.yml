@@ -1,0 +1,5 @@
+# Changes here will be overwritten by Copier
+_commit: ca96694
+_src_path: /home/johnsca/juju/projects/pytest-operator-template
+charm_type: container
+class_name: KubeStateMetricsOperator
