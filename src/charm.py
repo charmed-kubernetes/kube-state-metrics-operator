@@ -19,6 +19,8 @@ from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Layer
 
+from interface_prometheus.operator import PrometheusScrapeTarget
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,8 +29,14 @@ class KubeStateMetricsOperator(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
+        self.metrics = PrometheusScrapeTarget(self, "metrics")
+        self.telemetry = PrometheusScrapeTarget(self, "telemetry")
         self.framework.observe(self.on.config_changed, self._manage_workload)
         self.framework.observe(self.on.upgrade_charm, self._manage_workload)
+        self.framework.observe(self.on.metrics_relation_joined, self._register_metrics)
+        self.framework.observe(
+            self.on.telemetry_relation_joined, self._register_telemetry
+        )
 
     def _manage_workload(self, _):
         """Manage the container using the Pebble API."""
@@ -41,6 +49,24 @@ class KubeStateMetricsOperator(CharmBase):
             container.stop("kube-state-metrics")
         container.start("kube-state-metrics")
         self.unit.status = ActiveStatus()
+
+    def _register_metrics(self, _):
+        self.metrics.expose_scrape_target(
+            8080,
+            "/proxy/metrics",
+            scrape_interval="30s",
+            scrape_timeout="15s",
+            labels={"kube-state-metrics": "metrics"},
+        )
+
+    def _register_telemetry(self, _):
+        self.telemetry.expose_scrape_target(
+            8081,
+            "/proxy/metrics",
+            scrape_interval="30s",
+            scrape_timeout="15s",
+            labels={"kube-state-metrics": "telemetry"},
+        )
 
     def _validate_config(self):
         """Check that charm config settings are valid.
