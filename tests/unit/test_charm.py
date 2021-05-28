@@ -16,7 +16,7 @@ def harness():
         harness.cleanup()
 
 
-def test_config_changed(harness):
+def test_valid_config(harness):
     harness.begin()
 
     # confirm valid config is accepted
@@ -30,9 +30,14 @@ def test_config_changed(harness):
     )
     assert isinstance(harness.charm.unit.status, ActiveStatus)
 
+
+def test_invalid_config(harness):
+    harness.begin()
+
     # confirm conflicting config is blocked
     harness.update_config(
         {
+            "metric-allowlist": "foo",
             "metric-denylist": "foo",
         }
     )

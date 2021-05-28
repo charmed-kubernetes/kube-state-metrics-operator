@@ -1,25 +1,19 @@
 # kube-state-metrics
 
-## Description
+kube-state-metrics is a simple service that listens to the Kubernetes API
+server and generates metrics about the state of the objects. This Operator
+charm deploys and manages kube-state-metrics in a cluster, and allows for
+relating to Prometheus to send the metrics there for use.
 
-TODO: Describe your charm in a few paragraphs of Markdown
 
 ## Usage
 
-TODO: Provide high-level usage, such as required config or relations
+Assuming you already have a Kubernetes model on your Juju controller,
+simply deploy this charm. If you have a Prometheus available either
+within that model or as a cross-model offer, you can relate to it as
+well:
 
-
-## Developing
-
-Create and activate a virtualenv with the development requirements:
-
-    virtualenv -p python3 venv
-    source venv/bin/activate
-    pip install -r requirements-dev.txt
-
-## Testing
-
-The Python operator framework includes a very nice harness for testing
-operator behaviour without full deployment. Just `run_tests`:
-
-    ./run_tests
+```
+juju deploy ch:kube-state-metrics
+juju relate kube-state-metrics prometheus
+```

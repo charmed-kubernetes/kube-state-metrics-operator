@@ -15,69 +15,91 @@ develop a new k8s charm using the Operator Framework:
 import logging
 
 from ops.charm import CharmBase
-from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus
+from ops.model import ActiveStatus, BlockedStatus, ModelError
+from ops.pebble import Layer
 
 logger = logging.getLogger(__name__)
+
+
+class InvalidConfigError(ValueError):
+    pass
 
 
 class KubeStateMetricsOperator(CharmBase):
     """Charm the service."""
 
-    _stored = StoredState()
-
     def __init__(self, *args):
         super().__init__(*args)
-        self.framework.observe(
-            self.on.kube_state_metrics_pebble_ready,
-            self._on_kube_state_metrics_pebble_ready,
-        )
-        self.framework.observe(self.on.config_changed, self._on_config_changed)
-        self._stored.set_default(things=[])
+        self.framework.observe(self.on.config_changed, self._manage_workload)
 
-    def _on_kube_state_metrics_pebble_ready(self, event):
-        """Define and start a workload using the Pebble API.
+    def _manage_workload(self, _):
+        """Manage the container using the Pebble API."""
+        try:
+            self._validate_config()
+        except InvalidConfigError as e:
+            self.unit.status = BlockedStatus(str(e))
+            return
 
-        TEMPLATE-TODO: change this example to suit your needs.
-        You'll need to specify the right entrypoint and environment
-        configuration for your specific workload. Tip: you can see the
-        standard entrypoint of an existing container using docker inspect
-
-        Learn more about Pebble layers at https://github.com/canonical/pebble
-        """
-        # Get a reference the container attribute on the PebbleReadyEvent
-        container = event.workload
-        # Define an initial Pebble layer configuration
-        pebble_layer = {
-            "summary": "kube-state-metrics layer",
-            "description": "pebble config layer for kube-state-metrics",
-            "services": {
-                "kube-state-metrics": {
-                    "override": "replace",
-                    "summary": "kube-state-metrics",
-                    "command": "gunicorn -b 0.0.0.0:80 kube-state-metrics:app -k gevent",
-                    "startup": "enabled",
-                    "environment": {"thing": self.model.config["thing"]},
-                }
-            },
-        }
-        # Add intial Pebble config layer using the Pebble API
-        container.add_layer("kube-state-metrics", pebble_layer, combine=True)
-        # Autostart any services that were defined with startup: enabled
-        container.autostart()
-        # Learn more about statuses in the SDK docs:
-        # https://juju.is/docs/sdk/constructs#heading--statuses
+        container = self.unit.get_container(self.name)
+        layer_svc = self.layer.services.get(self.name)
+        plan_svc = container.get_plan().services.get(self.name)
+        if not plan_svc or plan_svc.command != layer_svc.command:
+            container.add_layer(self.name, self.layer, combine=True)
+            if self.is_running:
+                container.stop(self.name)
+            container.autostart()
         self.unit.status = ActiveStatus()
 
-    def _on_config_changed(self, _):
-        """Enforce valid config and update service if needed."""
+    def _validate_config(self):
+        """Check that charm config settings are valid.
+
+        If the charm config is not valid, will set the unit status to BlockedStatus and
+        return False.
+        """
         if self.config["metric-allowlist"] and self.config["metric-denylist"]:
-            self.unit.status = BlockedStatus(
+            raise InvalidConfigError(
                 "metric-allowlist and metric-denylist are mutually exclusive"
             )
-        else:
-            self.unit.status = ActiveStatus()
+
+    @property
+    def name(self):
+        return self.app.name
+
+    @property
+    def layer(self):
+        """Pebble layer for workload."""
+        return Layer(
+            {
+                "summary": f"{self.name} layer",
+                "description": f"pebble config layer for {self.name}",
+                "services": {
+                    self.name: {
+                        "override": "replace",
+                        "summary": self.name,
+                        "command": (
+                            "/kube-state-metrics --port=8080 --telemetry-port=8081 "
+                            " ".join(
+                                [
+                                    f"--{key}=value"
+                                    for key, value in self.config.items()
+                                    if value
+                                ]
+                            )
+                        ),
+                        "startup": "enabled",
+                    }
+                },
+            }
+        )
+
+    @property
+    def is_running(self):
+        container = self.unit.get_container(self.name)
+        try:
+            return container.get_service(self.name).is_running()
+        except ModelError:
+            return False
 
 
 if __name__ == "__main__":
