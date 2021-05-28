@@ -15,6 +15,7 @@ develop a new k8s charm using the Operator Framework:
 import logging
 
 from ops.charm import CharmBase
+from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, ModelError
 from ops.pebble import Layer
@@ -22,33 +23,42 @@ from ops.pebble import Layer
 logger = logging.getLogger(__name__)
 
 
-class InvalidConfigError(ValueError):
-    pass
-
-
 class KubeStateMetricsOperator(CharmBase):
     """Charm the service."""
 
+    _stored = StoredState()
+
     def __init__(self, *args):
         super().__init__(*args)
+        self._stored.set_default(pebble_ready=False)
+        self.framework.observe(
+            self.on.kube_state_metrics_pebble_ready, self._pebble_ready
+        )
         self.framework.observe(self.on.config_changed, self._manage_workload)
+        self.framework.observe(self.on.upgrade_charm, self._manage_workload)
+
+    def _pebble_ready(self, _):
+        """Record that the Pebble API is ready and start the workload."""
+        # The ConfigChangedEvent is triggered before the PebbleReadyEvent, and if we
+        # try to start the workload before Pebble is ready, it will raise one of
+        # several connection type errors. So instead, we have to track whether we've
+        # seen this event so that we can skip trying to restart the workload before
+        # Pebble is ready.
+        self._stored.pebble_ready = True
+        self._manage_workload(_)
 
     def _manage_workload(self, _):
         """Manage the container using the Pebble API."""
-        try:
-            self._validate_config()
-        except InvalidConfigError as e:
-            self.unit.status = BlockedStatus(str(e))
+        if not self._validate_config():
+            return
+        if not self._stored.pebble_ready:
             return
 
-        container = self.unit.get_container(self.name)
-        layer_svc = self.layer.services.get(self.name)
-        plan_svc = container.get_plan().services.get(self.name)
-        if not plan_svc or plan_svc.command != layer_svc.command:
-            container.add_layer(self.name, self.layer, combine=True)
-            if self.is_running:
-                container.stop(self.name)
-            container.autostart()
+        container = self.unit.get_container("kube-state-metrics")
+        container.add_layer("kube-state-metrics", self.layer, combine=True)
+        if self.is_running:
+            container.stop("kube-state-metrics")
+        container.start("kube-state-metrics")
         self.unit.status = ActiveStatus()
 
     def _validate_config(self):
@@ -58,25 +68,23 @@ class KubeStateMetricsOperator(CharmBase):
         return False.
         """
         if self.config["metric-allowlist"] and self.config["metric-denylist"]:
-            raise InvalidConfigError(
+            self.unit.status = BlockedStatus(
                 "metric-allowlist and metric-denylist are mutually exclusive"
             )
-
-    @property
-    def name(self):
-        return self.app.name
+            return False
+        return True
 
     @property
     def layer(self):
         """Pebble layer for workload."""
         return Layer(
             {
-                "summary": f"{self.name} layer",
-                "description": f"pebble config layer for {self.name}",
+                "summary": "kube-state-metrics layer",
+                "description": "pebble config layer for kube-state-metrics",
                 "services": {
-                    self.name: {
+                    "kube-state-metrics": {
                         "override": "replace",
-                        "summary": self.name,
+                        "summary": "kube-state-metrics",
                         "command": (
                             "/kube-state-metrics --port=8080 --telemetry-port=8081 "
                             " ".join(
@@ -95,9 +103,9 @@ class KubeStateMetricsOperator(CharmBase):
 
     @property
     def is_running(self):
-        container = self.unit.get_container(self.name)
+        container = self.unit.get_container("kube-state-metrics")
         try:
-            return container.get_service(self.name).is_running()
+            return container.get_service("kube-state-metrics").is_running()
         except ModelError:
             return False
 
