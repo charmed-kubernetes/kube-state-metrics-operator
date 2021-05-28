@@ -1,0 +1,5 @@
+name: prometheus
+summary: Prometheus scrape target operator interface module
+version: 1
+repo: https://git.launchpad.net/interface-prometheus
+branch: operator
