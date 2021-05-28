@@ -15,9 +15,8 @@ develop a new k8s charm using the Operator Framework:
 import logging
 
 from ops.charm import CharmBase
-from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, ModelError
+from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Layer
 
 logger = logging.getLogger(__name__)
@@ -26,37 +25,19 @@ logger = logging.getLogger(__name__)
 class KubeStateMetricsOperator(CharmBase):
     """Charm the service."""
 
-    _stored = StoredState()
-
     def __init__(self, *args):
         super().__init__(*args)
-        self._stored.set_default(pebble_ready=False)
-        self.framework.observe(
-            self.on.kube_state_metrics_pebble_ready, self._pebble_ready
-        )
         self.framework.observe(self.on.config_changed, self._manage_workload)
         self.framework.observe(self.on.upgrade_charm, self._manage_workload)
-
-    def _pebble_ready(self, _):
-        """Record that the Pebble API is ready and start the workload."""
-        # The ConfigChangedEvent is triggered before the PebbleReadyEvent, and if we
-        # try to start the workload before Pebble is ready, it will raise one of
-        # several connection type errors. So instead, we have to track whether we've
-        # seen this event so that we can skip trying to restart the workload before
-        # Pebble is ready.
-        self._stored.pebble_ready = True
-        self._manage_workload(_)
 
     def _manage_workload(self, _):
         """Manage the container using the Pebble API."""
         if not self._validate_config():
             return
-        if not self._stored.pebble_ready:
-            return
 
         container = self.unit.get_container("kube-state-metrics")
         container.add_layer("kube-state-metrics", self.layer, combine=True)
-        if self.is_running:
+        if container.get_service("kube-state-metrics").is_running():
             container.stop("kube-state-metrics")
         container.start("kube-state-metrics")
         self.unit.status = ActiveStatus()
@@ -87,7 +68,7 @@ class KubeStateMetricsOperator(CharmBase):
                         "summary": "kube-state-metrics",
                         "command": (
                             "/kube-state-metrics --port=8080 --telemetry-port=8081 "
-                            " ".join(
+                            + " ".join(
                                 [
                                     f"--{key}=value"
                                     for key, value in self.config.items()
@@ -100,14 +81,6 @@ class KubeStateMetricsOperator(CharmBase):
                 },
             }
         )
-
-    @property
-    def is_running(self):
-        container = self.unit.get_container("kube-state-metrics")
-        try:
-            return container.get_service("kube-state-metrics").is_running()
-        except ModelError:
-            return False
 
 
 if __name__ == "__main__":
