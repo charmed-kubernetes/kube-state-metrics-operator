@@ -35,15 +35,15 @@ async def test_build_and_deploy(ops_test):
 @pytest.mark.abort_on_fail
 async def test_add_prometheus(ops_test):
     # Have to use the repo for now because the version on Charmhub.io is out of date.
-    prometheus_zip_file = ops_test.tmp_path / "prometheus-k8s.zip"
-    prometheus_charm_dir = ops_test.tmp_path / "prometheus-k8s"
+    prometheus_zip_file = ops_test.tmp_path / "prometheus-operator-master.zip"
+    prometheus_charm_dir = ops_test.tmp_path / "prometheus-operator-master"
     urlretrieve(
         "https://github.com/canonical/prometheus-operator/archive/refs/heads/master.zip",
         prometheus_zip_file,
     )
     prometheus_charm_dir.mkdir()
     with ZipFile(prometheus_zip_file) as zip:
-        zip.extractall(prometheus_charm_dir)
+        zip.extractall(ops_test.tmp_path)
 
     # Deploy and relate.
     prometheus_charm_file = await ops_test.build_charm(prometheus_charm_dir)
