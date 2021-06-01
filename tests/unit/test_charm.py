@@ -5,7 +5,6 @@ import pytest
 from ops.model import ActiveStatus, BlockedStatus
 from ops.testing import Harness
 from charm import KubeStateMetricsOperator
-from interface_prometheus.operator import PrometheusScrapeTarget
 
 
 @pytest.fixture
@@ -18,8 +17,10 @@ def harness():
 
 
 @pytest.fixture(autouse=True)
-def patch_get_hostname(monkeypatch):
-    monkeypatch.setattr(PrometheusScrapeTarget, "get_hostname", lambda s: "ksm")
+def patch_address(monkeypatch):
+    monkeypatch.setattr(
+        KubeStateMetricsOperator, "monitoring_address", property(lambda s: "ksm")
+    )
 
 
 def test_valid_config(harness):
@@ -50,31 +51,10 @@ def test_invalid_config(harness):
     assert isinstance(harness.charm.unit.status, BlockedStatus)
 
 
-def test_register_metrics(harness):
+def test_register_monitoring(harness):
+    harness.set_leader(True)
     harness.begin()
-    rid = harness.add_relation("metrics", "prometheus")
-    rel = harness.model.get_relation("metrics", rid)
+    rid = harness.add_relation("monitoring", "prometheus")
+    rel = harness.model.get_relation("monitoring", rid)
     harness.add_relation_unit(rid, "prometheus/0")
-    assert rel.data[harness.charm.unit] == {
-        "hostname": "ksm",
-        "port": "8080",
-        "metrics_path": "/proxy/metrics",
-        "scrape_interval": "30s",
-        "scrape_timeout": "15s",
-        "labels": '{"kube-state-metrics": "metrics"}',
-    }
-
-
-def test_register_telemetry(harness):
-    harness.begin()
-    rid = harness.add_relation("telemetry", "prometheus")
-    rel = harness.model.get_relation("telemetry", rid)
-    harness.add_relation_unit(rid, "prometheus/0")
-    assert rel.data[harness.charm.unit] == {
-        "hostname": "ksm",
-        "port": "8081",
-        "metrics_path": "/proxy/metrics",
-        "scrape_interval": "30s",
-        "scrape_timeout": "15s",
-        "labels": '{"kube-state-metrics": "telemetry"}',
-    }
+    assert rel.data[harness.charm.app] == {"targets": '["ksm:8080", "ksm:8081"]'}
