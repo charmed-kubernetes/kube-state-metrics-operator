@@ -13,22 +13,13 @@ log = logging.getLogger(__name__)
 async def test_build_and_deploy(ops_test):
     ksm = await ops_test.build_charm(".")
     # Temporarily work around https://bugs.launchpad.net/juju/+bug/1929076
-    # await ops_test.model.deploy(
-    #     ksm,
-    #     resources={
-    #         "kube-state-metrics-image": "k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0"
-    #     },
-    # )
-    rc, stdout, stderr = await ops_test._run(
-        "juju",
-        "deploy",
+    await juju_deploy(  # ops_test.model.deploy(
+        ops_test,
         ksm,
-        "-m",
-        ops_test.model_full_name,
-        "--resource",
-        "kube-state-metrics-image=k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0",
+        resources={
+            "kube-state-metrics-image": "k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0"
+        },
     )
-    assert rc == 0, f"Failed to deploy: {stderr or stdout}"
     await ops_test.model.wait_for_idle(wait_for_active=True)
 
 
@@ -44,24 +35,27 @@ async def test_add_prometheus(ops_test):
     prometheus_charm_dir.mkdir()
     with ZipFile(prometheus_zip_file) as zip:
         zip.extractall(ops_test.tmp_path)
+    # NB: ZipFile does not properly preserve permissions, so we have to restore the
+    # exec bit on src/charm.py. See https://bugs.python.org/issue15795 and also
+    # https://stackoverflow.com/questions/39296101/python-zipfile-removes-execute-permissions-from-binaries
+    charm_file = prometheus_charm_dir / "src" / "charm.py"
+    charm_file.chmod(0x775)
 
     # Deploy and relate.
     prometheus_charm_file = await ops_test.build_charm(prometheus_charm_dir)
-    await ops_test.model.deploy(prometheus_charm_file)
+    # Temporarily work around https://bugs.launchpad.net/juju/+bug/1929076
+    await juju_deploy(  # ops_test.model.deploy(
+        ops_test,
+        prometheus_charm_file,
+        resources={
+            "prometheus-image": "prom/prometheus",
+        },
+    )
     await ops_test.model.add_relation("kube-state-metrics", "prometheus-k8s")
     await ops_test.model.wait_for_idle(wait_for_active=True)
 
 
-async def juju_run(unit, cmd):
-    result = await unit.run(cmd)
-    code = result.results["Code"]
-    stdout = result.results.get("Stdout")
-    stderr = result.results.get("Stderr")
-    assert code == "0", f"{cmd} failed ({code}): {stderr or stdout}"
-    return stdout
-
-
-async def test_with_prometheus(ops_test):
+async def test_stats_in_prometheus(ops_test):
     prometheus_unit = ops_test.model.applications["prometheus-k8s"].units[0]
     # Query pods.
     query = {"query": 'count(kube_pod_status_phase{phase="Running"} > 0)'}
@@ -75,3 +69,35 @@ async def test_with_prometheus(ops_test):
         raise
     assert result["status"] == "success"
     assert int(result["data"]["result"][0]["value"][1]) > 0
+
+
+async def juju_deploy(ops_test, charm, resources=None):
+    num_apps = len(ops_test.model.applications.keys())
+    resource_args = []
+    for res_name, res_value in (resources or {}).items():
+        resource_args.extend(["--resource", f"{res_name}={res_value}"])
+    log.info(f"Deploying charm from {charm} using CLI")
+    rc, stdout, stderr = await ops_test.run(
+        "juju",
+        "deploy",
+        "-m",
+        ops_test.model_full_name,
+        charm,
+        *resource_args,
+    )
+    assert rc == 0, f"Failed to deploy {charm.name}: {stderr or stdout}"
+    # CLI doesn't block until the app is actually visible, so we need to make sure
+    # that it's visible in our view of the model before continuing.
+    log.info("Waiting for application to be visible model")
+    await ops_test.model.block_until(
+        lambda: len(ops_test.model.applications.keys()) > num_apps
+    )
+
+
+async def juju_run(unit, cmd):
+    result = await unit.run(cmd)
+    code = result.results["Code"]
+    stdout = result.results.get("Stdout")
+    stderr = result.results.get("Stderr")
+    assert code == "0", f"{cmd} failed ({code}): {stderr or stdout}"
+    return stdout

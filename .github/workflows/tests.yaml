@@ -1,5 +1,5 @@
 name: Test Suite
-on: [pull_request]
+on: [push]
 
 jobs:
   lint:
@@ -52,7 +52,9 @@ jobs:
         run: |
           pip install tox
       - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@master
+        # Temporarily use branch for testing
+        uses: charmed-kubernetes/actions-operator@johnsca/gh-8/install-snaps
+        #uses: charmed-kubernetes/actions-operator@master
         with:
             provider: microk8s
       - name: Run test
