@@ -29,9 +29,7 @@ jobs:
         with:
           python-version: 3.8
       - name: Setup operator environment
-        # Temporarily use branch for testing
-        uses: charmed-kubernetes/actions-operator@johnsca/gh-8/install-snaps
-        #uses: charmed-kubernetes/actions-operator@master
+        uses: charmed-kubernetes/actions-operator@master
         with:
             provider: microk8s
       - name: Run test
