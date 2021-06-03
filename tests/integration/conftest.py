@@ -31,7 +31,7 @@ class Helpers:
         zip_file = tmp_path / f"{Path(repo).name}.zip"
         urlretrieve(url, zip_file)
         with ZipFile(zip_file) as zip:
-            charm_dir = zip.namelist()[0]
+            charm_dir = Path(zip.namelist()[0])
             zip.extractall(tmp_path)
 
         # NB: ZipFile does not properly preserve permissions, so we have to restore the
