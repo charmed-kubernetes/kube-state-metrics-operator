@@ -42,7 +42,7 @@ async def test_build_and_deploy(ops_test, helpers):
 
 async def test_stats_in_prometheus(ops_test, helpers):
     result = None
-    for attempt in range(3):
+    for attempt in range(12):
         try:
             result = await helpers.query_prometheus(
                 ops_test, 'count(kube_pod_status_phase{phase="Running"} > 0)'
