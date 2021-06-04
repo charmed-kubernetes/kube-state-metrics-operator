@@ -42,7 +42,7 @@ class Helpers:
         return charm_dir
 
     async def query_prometheus(self, ops_test, query):
-        prometheus_unit = ops_test.model.applications["prometheus-k8s"].units[0]
+        prometheus_unit = ops_test.model.applications["prometheus"].units[0]
         # Query pods.
         query = {"query": query}
         qs = urlencode(query)

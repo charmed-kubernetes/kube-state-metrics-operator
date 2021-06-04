@@ -5,20 +5,28 @@ import pytest
 log = logging.getLogger(__name__)
 
 
+BUNDLE = """
+series: kubernetes
+applications:
+  kube-state-metrics:
+      charm: {{ kube_state_metrics }}
+      scale: 1
+      resources:
+        kube-state-metrics-image: "k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0"
+  prometheus:
+      charm: {{ prometheus }}
+      scale: 1
+      resources:
+        prometheus-image: "prom/prometheus"
+relations:
+  - [kube-state-metrics, prometheus]
+""".strip()
+
+
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test, helpers):
-    await ops_test.model.deploy(
-        await ops_test.build_charm("."),
-        resources={
-            "kube-state-metrics-image": "k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0"
-        },
-    )
-    await ops_test.model.wait_for_idle(wait_for_active=True)
-
-    # Add Prometheus (this is done separately so that we can at least verify
-    # above that the kube-state-metrics charm successfully builds & deploys,
-    # even if the Prometheus charm doesn't). NB: We have to use the repo for
-    # now to get the updated sidecar version.
+    # Fetch Prometheus charm.  NB: We have to use the repo for now to get the
+    # updated sidecar version.
     prometheus_charm = await helpers.fetch_charm_src_from_github(
         ops_test.tmp_path,
         "canonical/prometheus-operator",
@@ -26,13 +34,15 @@ async def test_build_and_deploy(ops_test, helpers):
     )
 
     await ops_test.model.deploy(
-        await ops_test.build_charm(prometheus_charm),
-        resources={
-            "prometheus-image": "prom/prometheus",
-        },
+        ops_test.render_bundle(
+            BUNDLE,
+            kube_state_metrics=await ops_test.build_charm("."),
+            prometheus=await ops_test.build_charm(prometheus_charm),
+        )
     )
-    await ops_test.model.add_relation("kube-state-metrics", "prometheus-k8s")
-    await ops_test.model.wait_for_idle(wait_for_active=True)
+    await ops_test.model.wait_for_idle(
+        apps=["kube-state-metrics", "prometheus"], wait_for_active=True
+    )
 
 
 async def test_stats_in_prometheus(ops_test, helpers):
