@@ -16,8 +16,8 @@ import logging
 
 from ops.charm import CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus
-from ops.pebble import Layer
+from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
+from ops.pebble import Layer, ConnectionError
 
 from charms.prometheus.v1.prometheus import PrometheusConsumer
 
@@ -33,6 +33,9 @@ class KubeStateMetricsOperator(CharmBase):
             self, "monitoring", {"prometheus": ">=2.0"}
         )
 
+        self.framework.observe(
+            self.on.kube_state_metrics_pebble_ready, self._manage_workload
+        )
         self.framework.observe(self.on.config_changed, self._manage_workload)
         self.framework.observe(self.on.upgrade_charm, self._manage_workload)
         self.framework.observe(
@@ -45,25 +48,33 @@ class KubeStateMetricsOperator(CharmBase):
         if not self._validate_config():
             return
 
-        container = self.unit.get_container("kube-state-metrics")
-        container.add_layer("kube-state-metrics", self.layer, combine=True)
-        if container.get_service("kube-state-metrics").is_running():
-            container.stop("kube-state-metrics")
-        container.start("kube-state-metrics")
-        self.unit.status = ActiveStatus()
+        try:
+            container = self.unit.get_container("kube-state-metrics")
+            container.add_layer("kube-state-metrics", self.layer, combine=True)
+            if container.get_service("kube-state-metrics").is_running():
+                container.stop("kube-state-metrics")
+            container.start("kube-state-metrics")
+            self.unit.status = ActiveStatus()
+        except ConnectionError:
+            self.unit.status = WaitingStatus("Waiting for Pebble")
 
     def _register_monitoring(self, event):
-        """Register with a monitoring provider.
-
-        If we do not yet have an address, registration will be deferred until we do.
-        """
+        """Register with a monitoring provider."""
+        # NB: We have to check the relation here because we might be in a pre-relation
+        # leader-elected hook (and on the other hand, we might get the relation hook
+        # while we are not the leader).
         if not (self.unit.is_leader() and self.model.get_relation("monitoring")):
             return
-        if not self.monitoring_address:
+        address = self.monitoring_address
+        if not address:
+            # I don't think this should ever actually happen, and if it does, it
+            # likely indicates a more serious issue, but we should handle and
+            # report it gracefully anyway.
+            self.unit.status = WaitingStatus("Waiting for ingress address")
             event.defer()
             return
-        self.monitoring.add_endpoint(self.monitoring_address, 8080)  # metrics
-        self.monitoring.add_endpoint(self.monitoring_address, 8081)  # telemetry
+        self.monitoring.add_endpoint(address, 8080)  # metrics
+        self.monitoring.add_endpoint(address, 8081)  # telemetry
 
     def _validate_config(self):
         """Check that charm config settings are valid.
