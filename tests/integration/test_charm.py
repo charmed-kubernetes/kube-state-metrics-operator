@@ -14,12 +14,8 @@ async def test_build_and_deploy(ops_test, helpers):
     prometheus_charm = await ops_test.build_charm(
         await helpers.fetch_charm_src_from_github(
             ops_test.tmp_path,
-            # Temporarily use branch on fork until
-            # https://github.com/canonical/prometheus-operator/pull/40 lands.
-            "johnsca/prometheus-operator",
-            branch="gh/39/eschew-update-status",
-            # "canonical/prometheus-operator",
-            # branch="master",
+            "canonical/prometheus-operator",
+            branch="master",
         )
     )
 
