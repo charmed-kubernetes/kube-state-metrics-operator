@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 name: kube-state-metrics
 summary: Operator Charm for kube-state-metrics
+docs: https://discourse.charmhub.io/t/kube-state-metrics-docs-overview/4747
 description: |
   kube-state-metrics is a simple service that listens to the Kubernetes API
   server and generates metrics about the state of the objects. This Operator
