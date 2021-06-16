@@ -8,7 +8,7 @@ charm deploys and manages [kube-state-metrics][] in a cluster, and allows for
 relating to [Prometheus][] to send the metrics there for use.
 
 
-## Usage
+## Quick Start
 
 Assuming you already have a Kubernetes model on your Juju controller,
 simply deploy this charm. If you have [Prometheus][] available either
@@ -19,6 +19,16 @@ well:
 juju deploy ch:kube-state-metrics
 juju relate kube-state-metrics prometheus
 ```
+
+## Documentation
+
+See [the charm docs](https://charmhub.io/kube-state-metrics/docs) for
+more information on using and contributing to the charm.
+
+## Configuring the Charm
+
+See [the charm configuration reference](https://charmhub.io/kube-state-metrics/configure)
+for detailed information about how to configure the charm.
 
 
 <!-- Links -->
