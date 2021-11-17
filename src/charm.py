@@ -19,7 +19,7 @@ from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.pebble import Layer, ConnectionError
 
-from charms.prometheus.v1.prometheus import PrometheusConsumer
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 
 logger = logging.getLogger(__name__)
 
@@ -29,19 +29,23 @@ class KubeStateMetricsOperator(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.monitoring = PrometheusConsumer(
-            self, "monitoring", {"prometheus": ">=2.0"}
-        )
+        jobs = [
+            {
+                "static_configs": [
+                    {
+                        "targets": ["*:8080", "*:8081"],
+                    }
+                ]
+            }
+        ]
+
+        self.monitoring = MetricsEndpointProvider(self, jobs=jobs)
 
         self.framework.observe(
             self.on.kube_state_metrics_pebble_ready, self._manage_workload
         )
         self.framework.observe(self.on.config_changed, self._manage_workload)
         self.framework.observe(self.on.upgrade_charm, self._manage_workload)
-        self.framework.observe(
-            self.on.monitoring_relation_created, self._register_monitoring
-        )
-        self.framework.observe(self.on.leader_elected, self._register_monitoring)
 
     def _manage_workload(self, _):
         """Manage the container using the Pebble API."""
@@ -58,24 +62,6 @@ class KubeStateMetricsOperator(CharmBase):
         except ConnectionError:
             self.unit.status = WaitingStatus("Waiting for Pebble")
 
-    def _register_monitoring(self, event):
-        """Register with a monitoring provider."""
-        # NB: We have to check the relation here because we might be in a pre-relation
-        # leader-elected hook (and on the other hand, we might get the relation hook
-        # while we are not the leader).
-        if not (self.unit.is_leader() and self.model.get_relation("monitoring")):
-            return
-        address = self.monitoring_address
-        if not address:
-            # I don't think this should ever actually happen, and if it does, it
-            # likely indicates a more serious issue, but we should handle and
-            # report it gracefully anyway.
-            self.unit.status = WaitingStatus("Waiting for ingress address")
-            event.defer()
-            return
-        self.monitoring.add_endpoint(address, 8080)  # metrics
-        self.monitoring.add_endpoint(address, 8081)  # telemetry
-
     def _validate_config(self):
         """Check that charm config settings are valid.
 
@@ -91,7 +77,7 @@ class KubeStateMetricsOperator(CharmBase):
 
     @property
     def monitoring_address(self):
-        binding = self.model.get_binding("monitoring")
+        binding = self.model.get_binding("metrics-endpoint")
         if not binding:
             return None
         return str(binding.network.ingress_address or binding.network.bind_address)
