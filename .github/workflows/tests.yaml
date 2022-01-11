@@ -29,4 +29,4 @@ jobs:
         with:
             provider: microk8s
       - name: Run test
-        run: tox -e integration
+        run: tox -e integration -- --destructive-mode
