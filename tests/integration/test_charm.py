@@ -14,8 +14,8 @@ async def test_build_and_deploy(ops_test, helpers):
     prometheus_charm = await ops_test.build_charm(
         await helpers.fetch_charm_src_from_github(
             ops_test.tmp_path,
-            "canonical/prometheus-operator",
-            branch="master",
+            "canonical/prometheus-k8s-operator",
+            branch="main",
         )
     )
 
