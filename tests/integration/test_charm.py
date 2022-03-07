@@ -9,15 +9,6 @@ log = logging.getLogger(__name__)
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test, helpers):
     ksm_charm = await ops_test.build_charm(".")
-    # NB: We have to use the repo for Prometheus for now to get the updated
-    # sidecar version.
-    prometheus_charm = await ops_test.build_charm(
-        await helpers.fetch_charm_src_from_github(
-            ops_test.tmp_path,
-            "canonical/prometheus-operator",
-            branch="master",
-        )
-    )
 
     # NB: We can't use a bundle for now due to https://github.com/juju/python-libjuju/issues/506
     await ops_test.model.deploy(
@@ -26,13 +17,9 @@ async def test_build_and_deploy(ops_test, helpers):
         resources={
             "kube-state-metrics-image": "k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0"
         },
+        trust=True,  # so that the container can access k8s api
     )
-    await ops_test.model.deploy(
-        prometheus_charm,
-        resources={
-            "prometheus-image": "prom/prometheus",
-        },
-    )
+    await ops_test.model.deploy("prometheus-k8s", channel="latest/beta")
     await ops_test.model.add_relation("kube-state-metrics", "prometheus-k8s")
     await ops_test.model.wait_for_idle(wait_for_active=True)
 
@@ -47,6 +34,7 @@ async def test_stats_in_prometheus(ops_test, helpers):
         except AssertionError:
             # Prometheus might not be up yet
             pass
+            log.info("Waiting for Prometheus")
         else:
             assert result["status"] == "success"
             if result["data"]["result"]:
