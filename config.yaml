@@ -37,3 +37,8 @@ options:
     description: |
       Comma-separated list of Resources to override the default set of Resources to monitor.
     default: ""
+  scrape-interval:
+    default: 1m
+    description: |
+      Prometheus configuration for scrape interval of this charm.
+    type: string

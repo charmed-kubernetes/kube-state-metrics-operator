@@ -22,6 +22,7 @@ async def test_build_and_deploy(ops_test, helpers):
     # NB: We can't use a bundle for now due to https://github.com/juju/python-libjuju/issues/506
     await ops_test.model.deploy(
         ksm_charm,
+        config={"scrape-interval": "5s"},
         resources={
             "kube-state-metrics-image": "k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0"
         },

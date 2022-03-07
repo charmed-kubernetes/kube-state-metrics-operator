@@ -31,6 +31,7 @@ class KubeStateMetricsOperator(CharmBase):
         super().__init__(*args)
         jobs = [
             {
+                "scrape_interval": self.model.config["scrape-interval"],
                 "static_configs": [
                     {
                         "targets": ["*:8080", "*:8081"],
