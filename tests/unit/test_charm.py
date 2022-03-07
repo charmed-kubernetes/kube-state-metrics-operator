@@ -16,13 +16,6 @@ def harness():
         harness.cleanup()
 
 
-@pytest.fixture(autouse=True)
-def patch_address(monkeypatch):
-    monkeypatch.setattr(
-        KubeStateMetricsOperator, "monitoring_address", property(lambda s: "ksm")
-    )
-
-
 def test_valid_config(harness):
     harness.begin()
 
@@ -49,12 +42,3 @@ def test_invalid_config(harness):
         }
     )
     assert isinstance(harness.charm.unit.status, BlockedStatus)
-
-
-def test_register_monitoring(harness):
-    harness.set_leader(True)
-    harness.begin()
-    rid = harness.add_relation("monitoring", "prometheus")
-    rel = harness.model.get_relation("monitoring", rid)
-    harness.add_relation_unit(rid, "prometheus/0")
-    assert rel.data[harness.charm.app] == {"targets": '["ksm:8080", "ksm:8081"]'}
