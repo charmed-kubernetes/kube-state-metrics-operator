@@ -36,7 +36,7 @@ class KubeStateMetricsOperator(CharmBase):
                     {
                         "targets": ["*:8080", "*:8081"],
                     }
-                ]
+                ],
             }
         ]
 
@@ -86,6 +86,8 @@ class KubeStateMetricsOperator(CharmBase):
     @property
     def layer(self):
         """Pebble layer for workload."""
+        layer_args = list(self.config.keys())
+        layer_args.remove("scrape-interval")
         return Layer(
             {
                 "summary": "kube-state-metrics layer",
@@ -100,7 +102,7 @@ class KubeStateMetricsOperator(CharmBase):
                                 [
                                     f"--{key}=value"
                                     for key, value in self.config.items()
-                                    if value
+                                    if value and key in layer_args
                                 ]
                             )
                         ),
