@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test, helpers):
+async def test_build_and_deploy(ops_test):
     ksm_charm = await ops_test.build_charm(".")
 
     # NB: We can't use a bundle for now due to https://github.com/juju/python-libjuju/issues/506
@@ -19,7 +19,7 @@ async def test_build_and_deploy(ops_test, helpers):
         },
         trust=True,  # so that the container can access k8s api
     )
-    await ops_test.model.deploy("prometheus-k8s", channel="latest/beta")
+    await ops_test.model.deploy("prometheus-k8s", channel="latest/beta", trust=True)
     await ops_test.model.add_relation("kube-state-metrics", "prometheus-k8s")
     await ops_test.model.wait_for_idle(wait_for_active=True)
 
