@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test, helpers):
+async def test_build_and_deploy(ops_test):
     ksm_charm = await ops_test.build_charm(".")
 
     # NB: We can't use a bundle for now due to https://github.com/juju/python-libjuju/issues/506
