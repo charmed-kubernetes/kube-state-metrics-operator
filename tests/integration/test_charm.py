@@ -1,23 +1,38 @@
+from pathlib import Path
 import asyncio
 import logging
+import yaml
 
 import pytest
 
 log = logging.getLogger(__name__)
+CHARM_DIR = Path(__file__).parent.parent.parent
+
+
+def get_image() -> str:
+    """Get the image to use for kube-state-metrics."""
+    charmcraft_yaml = CHARM_DIR / "charmcraft.yaml"
+    metadata = yaml.safe_load(charmcraft_yaml.open())
+    return metadata["resources"]["kube-state-metrics-image"]["upstream-source"]
 
 
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test):
-    ksm_charm = await ops_test.build_charm(".")
+    """Build and deploy the charm."""
+
+    local_charm = list(CHARM_DIR.glob("*.charm"))
+    if local_charm:
+        # If we have a local charm, use it
+        ksm_charm = local_charm[0]
+    else:
+        ksm_charm = await ops_test.build_charm(".")
 
     # NB: We can't use a bundle for now
     # due to https://github.com/juju/python-libjuju/issues/506
     await ops_test.model.deploy(
         ksm_charm,
         config={"scrape-interval": "5s"},
-        resources={
-            "kube-state-metrics-image": "k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0"  # noqa: E501
-        },
+        resources={"kube-state-metrics-image": get_image()},
         trust=True,  # so that the container can access k8s api
     )
     await ops_test.model.deploy("prometheus-k8s", channel="latest/edge", trust=True)

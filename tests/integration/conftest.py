@@ -18,11 +18,12 @@ def helpers():
 class Helpers:
     async def juju_run(self, unit, cmd):
         """Run a command on a unit and return the output."""
-        result = await unit.run(cmd)
-        code = result.results["Code"]
-        stdout = result.results.get("Stdout")
-        stderr = result.results.get("Stderr")
-        assert code == "0", f"{cmd} failed ({code}): {stderr or stdout}"
+        action = await unit.run(cmd)
+        result = await action.wait()
+        code = result.results["return-code"]
+        stdout = result.results.get("stdout")
+        stderr = result.results.get("stderr")
+        assert code == 0, f"{cmd} failed ({code}): {stderr or stdout}"
         return stdout
 
     async def fetch_charm_src_from_github(self, tmp_path, repo, branch="main"):

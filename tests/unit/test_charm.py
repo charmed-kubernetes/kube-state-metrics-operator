@@ -18,7 +18,7 @@ def harness():
 
 def test_valid_config(harness):
     harness.begin()
-
+    harness.container_pebble_ready("kube-state-metrics")
     # confirm valid config is accepted
     harness.update_config(
         {

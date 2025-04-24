@@ -3,31 +3,96 @@
 
 # Architectures based on supported arch's in upstream
 # https://github.com/kubernetes/kube-state-metrics/blob/fad76e457a5cc0da10a6defed00539d256435c20/Makefile#L16
+name: kube-state-metrics
 type: "charm"
-bases:
-  - build-on:
-    - name: "ubuntu"
-      channel: "20.04"
-      architectures: [ "amd64" ]
-    run-on:
-    - name: "ubuntu"
-      channel: "20.04"
-      architectures:
-        - amd64
-        - arm
-        - arm64
-        - ppc64le
-        - s390x
-    - name: "ubuntu"
-      channel: "22.04"
-      architectures:
-        - amd64
-        - arm
-        - arm64
-        - ppc64le
-        - s390x
+summary: Operator Charm for kube-state-metrics
+description: |
+  kube-state-metrics is a simple service that listens to the Kubernetes API
+  server and generates metrics about the state of the objects. This Operator
+  charm deploys and manages kube-state-metrics in a cluster.
+links:
+  documentation: https://discourse.charmhub.io/t/kube-state-metrics-docs-overview/4747
+
+containers:
+  kube-state-metrics:
+    resource: kube-state-metrics-image
+
+resources:
+  kube-state-metrics-image:
+    type: oci-image
+    description: OCI image for kube-state-metrics
+    upstream-source: k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.15.0
+
+platforms:
+  ubuntu-24.04-amd64:
+    build-on:
+      - ubuntu@24.04:amd64
+    build-for:
+      - ubuntu@24.04:amd64
+  ubuntu-24.04-arm64:
+    build-on:
+      - ubuntu@24.04:arm64
+    build-for:
+      - ubuntu@24.04:arm64
+  ubuntu-24.04-s390x:
+    build-on:
+      - ubuntu@24.04:s390x
+    build-for:
+      - ubuntu@24.04:s390x
+
+assumes:
+- k8s-api
+
+provides:
+  metrics-endpoint:
+    interface: prometheus_scrape
+
+config:
+  options:
+    metric-allowlist:
+      type: string
+      description: |
+        Comma-separated list of metrics to be exposed. This list comprises of
+        exact metric names and/or regex patterns. The allowlist and denylist are
+        mutually exclusive.
+      default: ""
+    metric-denylist:
+      type: string
+      description: |
+        Comma-separated list of metrics not to be enabled. This list comprises of
+        exact metric names and/or regex patterns. The allowlist and denylist are
+        mutually exclusive.
+      default: ""
+    metric-labels-allowlist:
+      type: string
+      description: |
+        Comma-separated list of additional Kubernetes label keys that will be
+        used in the resource' labels metric. By default the metric contains only
+        name and namespace labels. To include additional labels provide a list of
+        resource names in their plural form and Kubernetes label keys you would
+        like to allow for them (e.g., '=namespaces=[k8s-label-1,k8s-label-n,...],pods=[app],...').
+        A single '*' can be provided per resource instead to allow any labels,
+        but that has severe performance implications (e.g., '=pods=[*]').
+      default: ""
+    namespaces:
+      type: string
+      description: |
+        Comma-separated list of namespaces to limit monitoring to.
+      default: ""
+    resources:
+      type: string
+      description: |
+        Comma-separated list of Resources to override the default set of Resources to monitor.
+      default: ""
+    scrape-interval:
+      default: 1m
+      description: |
+        Prometheus configuration for scrape interval of this charm.
+      type: string
+
 parts:
   charm:
+    plugin: charm
+    source: .
     build-packages:
-      - git
-
+    - git
