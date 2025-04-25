@@ -23,22 +23,17 @@ resources:
     description: OCI image for kube-state-metrics
     upstream-source: k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.15.0
 
+base: ubuntu@24.04
 platforms:
   ubuntu-24.04-amd64:
-    build-on:
-      - ubuntu@24.04:amd64
-    build-for:
-      - ubuntu@24.04:amd64
+    build-on: [amd64]
+    build-for: [amd64]
   ubuntu-24.04-arm64:
-    build-on:
-      - ubuntu@24.04:arm64
-    build-for:
-      - ubuntu@24.04:arm64
+    build-on: [arm64]
+    build-for: [arm64]
   ubuntu-24.04-s390x:
-    build-on:
-      - ubuntu@24.04:s390x
-    build-for:
-      - ubuntu@24.04:s390x
+    build-on: [s390x]
+    build-for: [s390x]
 
 assumes:
 - k8s-api
