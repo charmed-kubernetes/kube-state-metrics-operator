@@ -2230,7 +2230,7 @@ class PromqlTransformer:
         res = "promql-transform-{}".format(arch)
         try:
             path = self._charm.model.resources.fetch(res)
-            os.chmod(path, 0o777)
+            os.chmod(path, 0o777) # nosec B103
             return path
         except NotImplementedError:
             logger.debug("System lacks support for chmod")
